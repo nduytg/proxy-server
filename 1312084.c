@@ -27,6 +27,7 @@ int main(int argc,char* argv[])
 	
 	int filter = 0;	
 	char *filter_domain = NULL;
+	
 	if(argc == 3)
 	{
 		filter_domain = (char*)malloc(strlen(argv[2]));
@@ -37,6 +38,7 @@ int main(int argc,char* argv[])
 	printf("\nCopyright (c) 2014  GODLY T.ALIAS");
 	printf("\nModified by Duy Nguyen - 1312084\n\n");
 	printf("Proxy server run on port %s\n",argv[1]);
+	printf("Filter domain: %s\n",argv[2]);
 	   
 	//######## Cac buoc khoi tao socket Listening ########
 	bzero((char*)&serv_addr,sizeof(serv_addr));
@@ -94,27 +96,34 @@ int main(int argc,char* argv[])
 		printf("t2 = %s\n",t2);
 		
 		//Kiem tra filter case
-		if(filter == 1)
+		printf("Checking filter...\n");
+		char *p = strstr(t2,filter_domain);
+		if(p != NULL)
 		{
-			char *p = strstr(t2,filter_domain);
+			char *p = strstr(t2, filter_domain);
 			printf("P - 1 = %c\n",(p-1)[0]);
-			printf("P + strlen(filter) + 1 = %c\n", (p + strlen(filter_domain))[0]);
-			if( !((char)(p - 1)[0] != "." && (char)(p + strlen(filter_domain))[0] != "."))
+			printf("P + strlen(filter) = %c\n", (p + strlen(filter_domain))[0]);
+			
+			//Neu thieu prefix hay suffix thi bao 403
+			if( (( (p - 1)[0] == '.' ) && ( ((p + strlen(filter_domain))[0]) == '.' )) 
+				&& 	((strlen(t2) - 7) > strlen(p)) )
+				
 			{
-				char response[] = "403 (Forbidden) HTTP reponse.";
-				send(newsockfd,response,strlen(response),0);
-				printf("%s\n",response);
+				printf("Filter passed!\n");
 			}
 			else
 			{
-				printf("Filter hop le!\n");
-			}
-			goto close;
+				char response[] = "403 (Forbidden) HTTP reponse.";
+				send(newsockfd, response, strlen(response),0);
+				printf("%s\n", response);
+				goto close;
+			}	
 		}	
+		//-----Ket thuc kiem tra filter-----
 		
 		
 		//printf("Method = %s\n",method);
-		printf("-----HTML Header-----\n");
+		printf("\n\n-----HTML Header-----\n");
 		printf("%s\n-----------------\n\n",buffer);
 		
 		//Chua xoa
@@ -237,6 +246,8 @@ int main(int argc,char* argv[])
 		close(sockfd);
 		_exit(0);
 		free(htmlcontent);
+		if(filter_domain != NULL)
+			free(filter_domain);
 	}
 	else
 	{
