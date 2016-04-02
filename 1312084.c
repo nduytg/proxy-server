@@ -36,26 +36,13 @@ void skip();
 void error(char* msg);
 
 //Ham khoa mutex
-void lockMutexCount(int *count)
-{
-	printf("\nTrack 7\n");
-	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-	printf("\nTrack 8\n");
-	pthread_mutex_lock(&mutex);
-	printf("\nTrack 8.5\n");
-	(*count)++;
-	printf("\nTrack 9\n");
-	printf("Count: %d\n",*count);
-	pthread_mutex_unlock(&mutex);
-	printf("\nTrack 10\n");
-}
-
+void lockMutexCount(int *count);
 
 //Ham clean zombie
 void clean_zombie(int signal)
 {
-	int status;
-	wait(&status);
+	//int status;
+	wait(NULL);
 }
 
 //=====================================================
@@ -158,8 +145,6 @@ int main(int argc,char* argv[])
 		{
 			//printf("Track 1\n");
 			char *p = strstr(t2, filter_domain);
-			//printf("P - 1 = %c\n",(p-1)[0]);
-			//printf("P + strlen(filter) = %c\n", (p + strlen(filter_domain))[0]);
 			
 			//Neu thieu prefix hay suffix thi bao 403
 			if( (( (p - 1)[0] == '.' ) && ( ((p + strlen(filter_domain))[0]) == '.' )) 
@@ -178,13 +163,12 @@ int main(int argc,char* argv[])
 			}	
 		}	
 		//-----Ket thuc kiem tra filter-----
-		printf("Track 4\n");
 		
 		//printf("Method = %s\n",method);
 		printf("\n\n-----HTML Header-----\n");
 		printf("%s\n-----------------\n\n",buffer);
 	
-		//Cat header
+		//============Cat header================
 		char *pt;
 		pt = strstr(buffer,"\r\n\r\n");
 		if (pt != NULL)
@@ -192,7 +176,7 @@ int main(int argc,char* argv[])
 		char *htmlcontent = (char*) malloc(strlen(buffer) - strlen(pt) + 1);
 		strcpy(htmlcontent,pt);
 		//printf("HTML Content:\n%s\n",htmlcontent);
-		//#########Cat xong header##########
+		//======================================
 		
 		   
 		//Them HEAD voi POST vo day!!!
@@ -298,29 +282,9 @@ int main(int argc,char* argv[])
 			//send(newsockfd,"400 : BAD REQUEST\nONLY HTTP REQUESTS ALLOWED",18,0);
 			char response[] = "501: NOT IMPLEMENTED\nONLY HTTP REQUEST: GET, HEAD, POST ALLOWED\n";
 			send(newsockfd,response,strlen(response),0);
-			printf("Track 5\n");
-			//Error case! Increase g_error!!
-			//pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-			//pthread_mutex_lock(&mutex);
-			//lockMutexCount(g_error);
-			
-			//printf("\nTrack 7\n");
-			//pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-			//printf("\nTrack 8\n");
-			//pthread_mutex_lock(&mutex);
-			//printf("\nTrack 8.5\n");
-			
-			//printf("\nTrack 9\n");
-			//printf("Count: %d\n",*g_error);
-			//pthread_mutex_unlock(&mutex);
-			//printf("\nTrack 10\n");
-			
-			
-			//printf("Track 6\n");
-			(*g_error)++;
-			printf("Gia tri g_error hien tai: %d\n",*g_error);
-			
-			
+
+			//(*g_error)++;
+			//printf("Gia tri g_error hien tai: %d\n",*g_error);
 		}
 		
 		close:
@@ -332,43 +296,15 @@ int main(int argc,char* argv[])
 		free(htmlcontent);
 		if(filter_domain != NULL)
 			free(filter_domain);
-		//kill(pid,SIGINT);	
-		_exit(0);		//Terminate child processes
+		_exit(0);		
 	}
 	else
 	{
-		//kill(
 		close(newsockfd);
-		//childCount++;
-		//wait();
-		/*
-		//Parent's tasks
-		while(childCount)
-		{
-			pid = waitpid((pid_t) -1, NULL, WNOHANG);
-			if(pid < 0)
-				printf("Failed to kill\n");
-			else if (pid = 0 )
-				break;
-			else childCount--;
-		}
-		*/
-		
-		//kill $(ps -A -ostat,ppid | awk '/[zZ]/{print $2}');
-		
-		//Kill dc nhung ma lai chuyen thanh tuan tu -_-
-		/*
-		if(waitpid(pid, NULL, 0) >=0 )
-			printf("Killed child process with id: %d\n",pid);
-		else
-			printf("Cannot kill child process with id: %d\n",pid);
-		*/
 		goto accepting;
-		
 	}
 	
 
-	
 	return 0;
 }
 //=============================================================
@@ -410,6 +346,15 @@ void error(char* msg)
 {
 	perror(msg);
 	exit(0);
+}
+
+void lockMutexCount(int *count)
+{
+	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_lock(&mutex);
+	(*count)++;
+	printf("Count: %d\n",*count);
+	pthread_mutex_unlock(&mutex);
 }
 
 
