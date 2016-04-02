@@ -17,9 +17,9 @@
 
 //Cac bien toan cuc cho ham printReport
 char *filter_domain;
-int g_success;
-int g_filter;
-int g_error;
+int *g_success;
+int *g_filter;
+int *g_error;
 
 //==================Cac ham linh tinh=================
 //Nhan SIGUSR 1
@@ -34,6 +34,30 @@ void shutDown();
 //Skip qua signal SIGINT (Ctrl-C)
 void skip();
 void error(char* msg);
+
+//Ham khoa mutex
+void lockMutexCount(int *count)
+{
+	printf("\nTrack 7\n");
+	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	printf("\nTrack 8\n");
+	pthread_mutex_lock(&mutex);
+	printf("\nTrack 8.5\n");
+	(*count)++;
+	printf("\nTrack 9\n");
+	printf("Count: %d\n",*count);
+	pthread_mutex_unlock(&mutex);
+	printf("\nTrack 10\n");
+}
+
+
+//Ham clean zombie
+void clean_zombie(int signal)
+{
+	int status;
+	wait(&status);
+}
+
 //=====================================================
 
 
@@ -41,6 +65,7 @@ void error(char* msg);
 int main(int argc,char* argv[])
 {
 	//Signal catcher!
+	signal(SIGCHLD,clean_zombie);
 	signal(SIGINT,skip);
 	signal(SIGUSR2,shutDown);
 	signal(SIGUSR1,printReport);
@@ -271,10 +296,30 @@ int main(int argc,char* argv[])
 		else
 		{
 			//send(newsockfd,"400 : BAD REQUEST\nONLY HTTP REQUESTS ALLOWED",18,0);
-			char response[] = "501 : NOT IMPLEMENTED\nONLY HTTP REQUEST: GET, HEAD, POST ALLOWED\n";
+			char response[] = "501: NOT IMPLEMENTED\nONLY HTTP REQUEST: GET, HEAD, POST ALLOWED\n";
 			send(newsockfd,response,strlen(response),0);
-			
+			printf("Track 5\n");
 			//Error case! Increase g_error!!
+			//pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+			//pthread_mutex_lock(&mutex);
+			//lockMutexCount(g_error);
+			
+			//printf("\nTrack 7\n");
+			//pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+			//printf("\nTrack 8\n");
+			//pthread_mutex_lock(&mutex);
+			//printf("\nTrack 8.5\n");
+			
+			//printf("\nTrack 9\n");
+			//printf("Count: %d\n",*g_error);
+			//pthread_mutex_unlock(&mutex);
+			//printf("\nTrack 10\n");
+			
+			
+			//printf("Track 6\n");
+			(*g_error)++;
+			printf("Gia tri g_error hien tai: %d\n",*g_error);
+			
 			
 		}
 		
@@ -294,7 +339,7 @@ int main(int argc,char* argv[])
 	{
 		//kill(
 		close(newsockfd);
-		childCount++;
+		//childCount++;
 		//wait();
 		/*
 		//Parent's tasks
@@ -307,6 +352,16 @@ int main(int argc,char* argv[])
 				break;
 			else childCount--;
 		}
+		*/
+		
+		//kill $(ps -A -ostat,ppid | awk '/[zZ]/{print $2}');
+		
+		//Kill dc nhung ma lai chuyen thanh tuan tu -_-
+		/*
+		if(waitpid(pid, NULL, 0) >=0 )
+			printf("Killed child process with id: %d\n",pid);
+		else
+			printf("Cannot kill child process with id: %d\n",pid);
 		*/
 		goto accepting;
 		
@@ -323,16 +378,16 @@ int main(int argc,char* argv[])
 void printReport()
 {
 	printf("\nReceive SIGUSR1.....reporting status:");
-	printf("\n-- Processed %d request(s) successfully.",g_success);
+	printf("\n-- Processed %d request(s) successfully.",*g_success);
 	
 	if(filter_domain != NULL)
 		printf("\n-- Filtering: %s",filter_domain);
 	else
 		printf("\n-- Filtering: (empty).");
 		
-	printf("\n-- Filtered %d request(s).",g_filter);
+	printf("\n-- Filtered %d request(s).",*g_filter);
 	//printf("\nTrack 1\n");
-	printf("\n-- Encountered %d request(s) in error.\n",g_error);
+	printf("\n-- Encountered %d request(s) in error.\n",*g_error);
 	
 }
 
