@@ -4,35 +4,57 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/wait.h>		//Ham waitpid, kill child processes
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
-
 #include <errno.h>
-  
-		
 
-void error(char* msg)
-{
-	perror(msg);
-	exit(0);
-}
-  
+#include <sys/wait.h>		//Ham waitpid, kill child processes
+#include <signal.h>			//Signal handler
+#include <pthread.h>		//Mutex
+
+//Cac bien toan cuc cho ham printReport
+char *filter_domain;
+int g_success;
+int g_filter;
+int g_error;
+
+//==================Cac ham linh tinh=================
+//Nhan SIGUSR 1
+//Report lai cac thong tin chuong trinh khi chay
+void printReport();
+
+//Nhan SIGUSR 2
+//Shutdown chuong trinh
+void shutDown();
+
+//Nhan SIGINT
+//Skip qua signal SIGINT (Ctrl-C)
+void skip();
+void error(char* msg);
+//=====================================================
+
+//==================Ham Main===========================
 int main(int argc,char* argv[])
 {
+	signal(SIGINT,skip);
+	signal(SIGUSR2,shutDown);
+	signal(SIGUSR1,printReport);
+	
 	pid_t pid;
 	struct sockaddr_in addr_in, cli_addr, serv_addr;
 	struct hostent* host;
 	int sockfd, newsockfd;
 	int childCount = 0;
-	   
+	
+	g_success = g_filter = g_error = 0;
+	
 	if(argc<2)
 		error("./MSSV <port_no>");
 	
 	int filter = 0;	
-	char *filter_domain = NULL;
 	
+	filter_domain = NULL;
 	if(argc == 3)
 	{
 		filter_domain = (char*)malloc(strlen(argv[2]));
@@ -108,7 +130,7 @@ int main(int argc,char* argv[])
 			p = strstr(t2,filter_domain);
 		if(p != NULL)
 		{
-			printf("Track 1\n");
+			//printf("Track 1\n");
 			char *p = strstr(t2, filter_domain);
 			//printf("P - 1 = %c\n",(p-1)[0]);
 			//printf("P + strlen(filter) = %c\n", (p + strlen(filter_domain))[0]);
@@ -118,14 +140,14 @@ int main(int argc,char* argv[])
 				&& 	((strlen(t2) - 7) > strlen(p)) )
 				
 			{
-				printf("Track 2\n");
+				//printf("Track 2\n");
 				printf("Filter passed!\n");
 			}
 			else
 			{
-				printf("Track 3\n");
+				//printf("Track 3\n");
 				//De check lai
-				char response[] = "403 (Forbidden) HTTP reponse.";
+				char response[] = "403 (Forbidden) HTTP reponse.\n";
 				send(newsockfd, response, strlen(response),0);
 				printf("%s\n", response);
 				goto close;
@@ -263,7 +285,7 @@ int main(int argc,char* argv[])
 		free(htmlcontent);
 		if(filter_domain != NULL)
 			free(filter_domain);
-		kill(pid,SIGINT);	
+		//kill(pid,SIGINT);	
 		_exit(0);		//Terminate child processes
 	}
 	else
@@ -271,7 +293,8 @@ int main(int argc,char* argv[])
 		//kill(
 		close(newsockfd);
 		childCount++;
-		wait();
+		//wait();
+		/*
 		//Parent's tasks
 		while(childCount)
 		{
@@ -282,6 +305,7 @@ int main(int argc,char* argv[])
 				break;
 			else childCount--;
 		}
+		*/
 		goto accepting;
 		
 	}
@@ -291,3 +315,43 @@ int main(int argc,char* argv[])
 	
 	return 0;
 }
+//=============================================================
+
+//Nhan SIGUSR 1
+//Report lai cac thong tin chuong trinh khi chay
+void printReport()
+{
+	printf("\nReceive SIGUSR1.....reporting status:");
+	printf("\n-- Processed %d request(s) successfully.",g_success);
+	if(filter_domain != NULL)
+		printf("\n-- Filtering: %s",filter_domain);
+	else
+		printf("\n-- Filtering: (empty).");
+	printf("\n-- Filtered %d request(s).",g_filter);
+	printf("\nTrack 1\n");
+	printf("\n-- Encountered %d request(s) in error.",g_error);
+	
+}
+
+//Nhan SIGUSR 2
+//Shutdown chuong trinh
+void shutDown()
+{
+	printf("\nGet SIGUSR2, the program will shutdown\n");
+	exit(1);
+}
+
+//Nhan SIGINT
+//Skip qua signal SIGINT (Ctrl-C)
+void skip()
+{
+	printf("\nSkip interrupt signal (Ctrl-C)\n");
+}		
+
+void error(char* msg)
+{
+	perror(msg);
+	exit(0);
+}
+
+
