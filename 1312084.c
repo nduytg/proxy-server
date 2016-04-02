@@ -13,6 +13,8 @@
 #include <signal.h>			//Signal handler
 #include <pthread.h>		//Mutex
 
+#define BACK_LOG 20
+
 //Cac bien toan cuc cho ham printReport
 char *filter_domain;
 int g_success;
@@ -34,12 +36,15 @@ void skip();
 void error(char* msg);
 //=====================================================
 
+
 //==================Ham Main===========================
 int main(int argc,char* argv[])
 {
+	//Signal catcher!
 	signal(SIGINT,skip);
 	signal(SIGUSR2,shutDown);
 	signal(SIGUSR1,printReport);
+	//---------------
 	
 	pid_t pid;
 	struct sockaddr_in addr_in, cli_addr, serv_addr;
@@ -49,8 +54,8 @@ int main(int argc,char* argv[])
 	
 	g_success = g_filter = g_error = 0;
 	
-	if(argc<2)
-		error("./MSSV <port_no>");
+	if(argc < 2)
+		error("./MSSV <port_no> [filter-domain]");
 	
 	int filter = 0;	
 	
@@ -81,23 +86,19 @@ int main(int argc,char* argv[])
 	
 	if(sockfd < 0)
 		error("Problem in initializing socket");
-	   
+	
 	if(bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(serv_addr))<0)
 		error("Error on binding");
 	//########################################################
 	  
-	//Decrease backlog to 20  
-	//listen(sockfd,50);
-	listen(sockfd,20);
+	//Decrease backlog from 50 -> 20  
+	listen(sockfd,BACK_LOG);
 	int clilen = sizeof(cli_addr);
 	  
 	 
 	accepting:
 	
-	//Accecpt connections
-	//Multi thread cho nay!!
 	newsockfd = accept(sockfd,(struct sockaddr*)&cli_addr,&clilen);
-	   
 	if(newsockfd < 0)
 		error("Problem in accepting connection");
 	  
@@ -140,12 +141,10 @@ int main(int argc,char* argv[])
 				&& 	((strlen(t2) - 7) > strlen(p)) )
 				
 			{
-				//printf("Track 2\n");
 				printf("Filter passed!\n");
 			}
 			else
 			{
-				//printf("Track 3\n");
 				//De check lai
 				char response[] = "403 (Forbidden) HTTP reponse.\n";
 				send(newsockfd, response, strlen(response),0);
@@ -242,15 +241,15 @@ int main(int argc,char* argv[])
 			bzero((char*)buffer,sizeof(buffer));
 			
 			if(temp != NULL)
-				//sprintf(buffer,"GET /%s %s\r\nHost: %s\r\nConnection: close\r\n\r\n",temp,t3,t2);
 				sprintf(buffer,"%s /%s %s\r\nHost: %s\r\nConnection: close\r\n\r\n",method, temp, t3, t2);
 			else
-				//sprintf(buffer,"GET / %s\r\nHost: %s\r\nConnection: close\r\n\r\n",t3,t2);
 				sprintf(buffer,"%s / %s\r\nHost: %s\r\nConnection: close\r\n\r\n",method, t3, t2);
 				
+			//Cho method POST
 			if(htmlcontent != NULL)
 				strcat(buffer,htmlcontent);
 			
+			//Send requests to web server
 			n = send(sockfd1, buffer, strlen(buffer), 0);
 			//printf("\n%s\n",buffer);
 			printf("----My proxy request to http server----\n%s\n\n========END========",buffer);
@@ -263,17 +262,20 @@ int main(int argc,char* argv[])
 				{
 					bzero((char*)buffer, 500);
 					n = recv(sockfd1, buffer, 500, 0);
-					if(!(n<=0))
+					if( !(n <= 0) )
 						send(newsockfd, buffer, n, 0);
 				}
-				while(n>0);
+				while(n > 0);
 			}
 		}
 		else
 		{
-			char response[] = "501 : NOT IMPLEMENTED\nONLY HTTP REQUEST: GET, HEAD, POST ALLOWED\n";
 			//send(newsockfd,"400 : BAD REQUEST\nONLY HTTP REQUESTS ALLOWED",18,0);
+			char response[] = "501 : NOT IMPLEMENTED\nONLY HTTP REQUEST: GET, HEAD, POST ALLOWED\n";
 			send(newsockfd,response,strlen(response),0);
+			
+			//Error case! Increase g_error!!
+			
 		}
 		
 		close:
@@ -312,7 +314,6 @@ int main(int argc,char* argv[])
 	
 
 	
-	
 	return 0;
 }
 //=============================================================
@@ -323,13 +324,15 @@ void printReport()
 {
 	printf("\nReceive SIGUSR1.....reporting status:");
 	printf("\n-- Processed %d request(s) successfully.",g_success);
+	
 	if(filter_domain != NULL)
 		printf("\n-- Filtering: %s",filter_domain);
 	else
 		printf("\n-- Filtering: (empty).");
+		
 	printf("\n-- Filtered %d request(s).",g_filter);
-	printf("\nTrack 1\n");
-	printf("\n-- Encountered %d request(s) in error.",g_error);
+	//printf("\nTrack 1\n");
+	printf("\n-- Encountered %d request(s) in error.\n",g_error);
 	
 }
 
