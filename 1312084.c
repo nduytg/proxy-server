@@ -1,14 +1,18 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<unistd.h>
-#include<string.h>
-#include<sys/types.h>
-#include<sys/socket.h>
-#include<arpa/inet.h>
-#include<netinet/in.h>
-#include<netdb.h>
-#include<errno.h>
-   
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/wait.h>		//Ham waitpid, kill child processes
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netdb.h>
+
+#include <errno.h>
+  
+		
+
 void error(char* msg)
 {
 	perror(msg);
@@ -21,6 +25,7 @@ int main(int argc,char* argv[])
 	struct sockaddr_in addr_in, cli_addr, serv_addr;
 	struct hostent* host;
 	int sockfd, newsockfd;
+	int childCount = 0;
 	   
 	if(argc<2)
 		error("./MSSV <port_no>");
@@ -36,9 +41,10 @@ int main(int argc,char* argv[])
 	  
 	printf("\n*****WELCOME TO PROXY SERVER*****\n");
 	printf("\nCopyright (c) 2014  GODLY T.ALIAS");
-	printf("\nModified by Duy Nguyen - 1312084\n\n");
+	printf("\nModified by Duy Nguyen - 1312084\n");
 	printf("Proxy server run on port %s\n",argv[1]);
-	printf("Filter domain: %s\n",argv[2]);
+	if(argc == 3) 
+		printf("Filter domain: %s\n",argv[2]);
 	   
 	//######## Cac buoc khoi tao socket Listening ########
 	bzero((char*)&serv_addr,sizeof(serv_addr));
@@ -49,9 +55,9 @@ int main(int argc,char* argv[])
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	   
 	//Tao socket!  
-	sockfd = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+	sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	
-	if(sockfd<0)
+	if(sockfd < 0)
 		error("Problem in initializing socket");
 	   
 	if(bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(serv_addr))<0)
@@ -97,22 +103,28 @@ int main(int argc,char* argv[])
 		
 		//Kiem tra filter case
 		printf("Checking filter...\n");
-		char *p = strstr(t2,filter_domain);
+		char *p = NULL;
+		if(filter_domain != NULL)
+			p = strstr(t2,filter_domain);
 		if(p != NULL)
 		{
+			printf("Track 1\n");
 			char *p = strstr(t2, filter_domain);
-			printf("P - 1 = %c\n",(p-1)[0]);
-			printf("P + strlen(filter) = %c\n", (p + strlen(filter_domain))[0]);
+			//printf("P - 1 = %c\n",(p-1)[0]);
+			//printf("P + strlen(filter) = %c\n", (p + strlen(filter_domain))[0]);
 			
 			//Neu thieu prefix hay suffix thi bao 403
 			if( (( (p - 1)[0] == '.' ) && ( ((p + strlen(filter_domain))[0]) == '.' )) 
 				&& 	((strlen(t2) - 7) > strlen(p)) )
 				
 			{
+				printf("Track 2\n");
 				printf("Filter passed!\n");
 			}
 			else
 			{
+				printf("Track 3\n");
+				//De check lai
 				char response[] = "403 (Forbidden) HTTP reponse.";
 				send(newsockfd, response, strlen(response),0);
 				printf("%s\n", response);
@@ -120,13 +132,12 @@ int main(int argc,char* argv[])
 			}	
 		}	
 		//-----Ket thuc kiem tra filter-----
-		
+		printf("Track 4\n");
 		
 		//printf("Method = %s\n",method);
 		printf("\n\n-----HTML Header-----\n");
 		printf("%s\n-----------------\n\n",buffer);
-		
-		//Chua xoa
+	
 		//Cat header
 		char *pt;
 		pt = strstr(buffer,"\r\n\r\n");
@@ -139,6 +150,7 @@ int main(int argc,char* argv[])
 		
 		   
 		//Them HEAD voi POST vo day!!!
+		//3 phuong thuc HEAD, GET, POST cho giao thuc http version 1.0 va 1.1
 		if ( ( (strncmp(method,"GET",3) == 0) || (strncmp(method,"HEAD",4) == 0 ) || (strncmp(method,"POST",4) == 0 ))
 			&& ((strncmp(t3,"HTTP/1.1",8) == 0) || (strncmp(t3,"HTTP/1.0",8) == 0)) && (strncmp(t2,"http://",7) == 0))
 		{
@@ -149,13 +161,14 @@ int main(int argc,char* argv[])
 			{
 				if(t2[i]==':')
 				{
+					//URI: htttp://example.com:8820/......
 					printf("%s\n",t2);
-					//Flag nay chi ta?
-					flag=1;
+					flag = 1;
 					break;
 				}
 			}
 			   
+			//Lay duong dan
 			temp = strtok(t2,"//");
 			if (flag == 0)
 			{
@@ -167,10 +180,12 @@ int main(int argc,char* argv[])
 				temp = strtok(NULL,":");
 			}
 			   
+			//t2 tu fulllink => hostname
 			sprintf(t2,"%s",temp);
 			printf("host = %s",t2);
 			host = gethostbyname(t2);
 			   
+			//Get port (URI) neu co
 			if(flag == 1)
 			{
 				printf("Flag = 1\nTemp = %s\n",temp);
@@ -180,16 +195,16 @@ int main(int argc,char* argv[])
 			   
 			   
 			strcat(t1,"^]");
-			temp=strtok(t1,"//");
-			temp=strtok(NULL,"/");
-			if(temp!=NULL)
-			temp=strtok(NULL,"^]");
-			printf("\npath = %s\nPort = %d\n",temp,port);
+			temp = strtok(t1,"//");
+			temp = strtok(NULL,"/");
+			if(temp != NULL)
+				temp = strtok(NULL,"^]");
+			printf("\nPath = %s\nPort = %d\n",temp,port);
 			   
 			   
 			bzero((char*)&host_addr,sizeof(host_addr));
-			host_addr.sin_port=htons(port);
-			host_addr.sin_family=AF_INET;
+			host_addr.sin_port = htons(port);
+			host_addr.sin_family = AF_INET;
 			bcopy((char*)host->h_addr,(char*)&host_addr.sin_addr.s_addr,host->h_length);
 			   
 			sockfd1 = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
@@ -197,7 +212,7 @@ int main(int argc,char* argv[])
 			
 			sprintf(buffer,"\nConnected to %s  IP - %s\n",t2,inet_ntoa(host_addr.sin_addr));
 			
-			if(newsockfd1<0)
+			if(newsockfd1 < 0 )
 				error("Error in connecting to remote server");
 			   
 			printf("\n%s\n",buffer);
@@ -211,12 +226,12 @@ int main(int argc,char* argv[])
 				//sprintf(buffer,"GET / %s\r\nHost: %s\r\nConnection: close\r\n\r\n",t3,t2);
 				sprintf(buffer,"%s / %s\r\nHost: %s\r\nConnection: close\r\n\r\n",method, t3, t2);
 				
-			if(htmlcontent!=NULL)
+			if(htmlcontent != NULL)
 				strcat(buffer,htmlcontent);
 			
-			n = send(sockfd1,buffer,strlen(buffer),0);
+			n = send(sockfd1, buffer, strlen(buffer), 0);
 			//printf("\n%s\n",buffer);
-			printf("----My proxy request to http server----\n%s\n\n========END======",buffer);
+			printf("----My proxy request to http server----\n%s\n\n========END========",buffer);
 			
 			if(n<0)
 				error("Error writing to socket");
@@ -244,15 +259,35 @@ int main(int argc,char* argv[])
 		close(sockfd1);
 		close(newsockfd);
 		close(sockfd);
-		_exit(0);
+		//_exit(0);
 		free(htmlcontent);
 		if(filter_domain != NULL)
 			free(filter_domain);
+		kill(pid,SIGINT);	
+		_exit(0);		//Terminate child processes
 	}
 	else
 	{
+		//kill(
 		close(newsockfd);
+		childCount++;
+		wait();
+		//Parent's tasks
+		while(childCount)
+		{
+			pid = waitpid((pid_t) -1, NULL, WNOHANG);
+			if(pid < 0)
+				printf("Failed to kill\n");
+			else if (pid = 0 )
+				break;
+			else childCount--;
+		}
 		goto accepting;
+		
 	}
+	
+
+	
+	
 	return 0;
 }
