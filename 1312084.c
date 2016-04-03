@@ -11,20 +11,37 @@
 
 #include <sys/wait.h>		//Ham waitpid, kill child processes
 #include <signal.h>			//Signal handler
-#include <pthread.h>		//Mutex
+//#include <pthread.h>		//Mutex
 
+//Thu vien cho shared memory giua cac process
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/types.h>
+
+//Cac gia tri define
 #define BACK_LOG 20
+#define KEY 123456
+#define SHARE_SIZE sizeof(int)*4
 
 //Cac bien toan cuc cho ham printReport
+typedef struct
+{
+	int mutex;
+	int g_success;
+	int g_filter;
+	int g_error;
+} g_var;
+
 char *filter_domain;
-int *g_success;
-int *g_filter;
-int *g_error;
+char *htmlcontent;
+g_var g;
 
 //==================Cac ham linh tinh=================
 //Nhan SIGUSR 1
 //Report lai cac thong tin chuong trinh khi chay
-void printReport();
+void printReport()
+{
+}
 
 //Nhan SIGUSR 2
 //Shutdown chuong trinh
@@ -35,13 +52,9 @@ void shutDown();
 void skip();
 void error(char* msg);
 
-//Ham khoa mutex
-void lockMutexCount(int *count);
-
 //Ham clean zombie
 void clean_zombie(int signal)
 {
-	//int status;
 	wait(NULL);
 }
 
@@ -52,7 +65,7 @@ void clean_zombie(int signal)
 int main(int argc,char* argv[])
 {
 	//Signal catcher!
-	signal(SIGCHLD,clean_zombie);
+	//signal(SIGCHLD,clean_zombie);
 	signal(SIGINT,skip);
 	signal(SIGUSR2,shutDown);
 	signal(SIGUSR1,printReport);
@@ -64,7 +77,8 @@ int main(int argc,char* argv[])
 	int sockfd, newsockfd;
 	int childCount = 0;
 	
-	g_success = g_filter = g_error = 0;
+	//Bien dem toan cuc cho SIGUSR1
+	//g.g_success = g.g_filter = g.g_error = g.mutex = 0;
 	
 	if(argc < 2)
 		error("./MSSV <port_no> [filter-domain]");
@@ -72,6 +86,7 @@ int main(int argc,char* argv[])
 	int filter = 0;	
 	
 	filter_domain = NULL;
+	htmlcontent = NULL;
 	if(argc == 3)
 	{
 		filter_domain = (char*)malloc(strlen(argv[2]));
@@ -113,16 +128,45 @@ int main(int argc,char* argv[])
 	newsockfd = accept(sockfd,(struct sockaddr*)&cli_addr,&clilen);
 	if(newsockfd < 0)
 		error("Problem in accepting connection");
-	  
+	
+	//Tao vung nho shared memory cho cac process
+	//***Create the segment***
+	//key_t key = KEY;
+	//int shmid;		//id de quan ly vung nho chung
+	//int *shm;, *s	//Con tro de tro toi vung nho chung
+	
+	/*
+	if( (shmid = shmget(key,SHARE_SIZE, IPC_CREAT | 0666))  < 0)
+	{
+		perror("shmget failed!\n");
+		//exit(1);
+		goto close;
+	}
+	//***Attach the segment to parent process data space.
+	if( (shm = shmat(shmid, NULL,0)) == (g_var*) -1)
+	{
+		perror("shmat failed!\n");
+		goto close;
+	}
+	*/
+	
 	//Fork process!!  
 	pid = fork();
 	
 	//Neu process con dc tao ra!!
 	if(pid == 0)
 	{
+		//------Shared Memory------
+		//shmid = shmget(key, SHARE_SIZE, 0);
+		//shmctl(shmid,cmd,g);
+		//shm = shmat(shmid, 0, 0);
+		//s = shm;
+		//*s = '\0';
+		//-------------------------
+		
+		
 		struct sockaddr_in host_addr;
 		int flag = 0, newsockfd1, n, port = 0, i, sockfd1;
-		//why 510?
 		char buffer[510], t1[300], t2[300], t3[10];
 		char method[5];
 		char* temp = NULL;
@@ -131,19 +175,16 @@ int main(int argc,char* argv[])
 		   
 		//t1 = GET (HEAD, POST)
 		//t2 = link
-		//t3 = HTTP version
-		//Nhan va phan tach request thanh tung phan   
+		//t3 = HTTP version 
 		sscanf(buffer,"%s %s %s",method,t2,t3);
-		printf("t2 = %s\n",t2);
 		
 		//Kiem tra filter case
-		printf("Checking filter...\n");
+		//printf("Checking filter...\n");
 		char *p = NULL;
 		if(filter_domain != NULL)
 			p = strstr(t2,filter_domain);
 		if(p != NULL)
 		{
-			//printf("Track 1\n");
 			char *p = strstr(t2, filter_domain);
 			
 			//Neu thieu prefix hay suffix thi bao 403
@@ -155,7 +196,11 @@ int main(int argc,char* argv[])
 			}
 			else
 			{
-				//De check lai
+				//TH1 cua ERROR
+				//shmctl(shmid,SHM_LOCK,g);
+				//-------------
+				
+				
 				char response[] = "403 (Forbidden) HTTP reponse.\n";
 				send(newsockfd, response, strlen(response),0);
 				printf("%s\n", response);
@@ -173,7 +218,7 @@ int main(int argc,char* argv[])
 		pt = strstr(buffer,"\r\n\r\n");
 		if (pt != NULL)
 			pt += 4;
-		char *htmlcontent = (char*) malloc(strlen(buffer) - strlen(pt) + 1);
+		htmlcontent = (char*) malloc(strlen(buffer) - strlen(pt) + 1);
 		strcpy(htmlcontent,pt);
 		//printf("HTML Content:\n%s\n",htmlcontent);
 		//======================================
@@ -221,8 +266,7 @@ int main(int argc,char* argv[])
 				printf("Flag = 1\nTemp = %s\n",temp);
 				temp=strtok(NULL,"/");
 				port = atoi(temp);
-			}
-			   
+			}	   
 			   
 			strcat(t1,"^]");
 			temp = strtok(t1,"//");
@@ -241,14 +285,13 @@ int main(int argc,char* argv[])
 			newsockfd1 = connect(sockfd1,(struct sockaddr*)&host_addr,sizeof(struct sockaddr));
 			
 			sprintf(buffer,"\nConnected to %s  IP - %s\n",t2,inet_ntoa(host_addr.sin_addr));
+			printf("\n%s\n",buffer);
 			
 			if(newsockfd1 < 0 )
 				error("Error in connecting to remote server");
 			   
-			printf("\n%s\n",buffer);
-			//send(newsockfd,buffer,strlen(buffer),0);
-			bzero((char*)buffer,sizeof(buffer));
 			
+			bzero((char*)buffer,sizeof(buffer));
 			if(temp != NULL)
 				sprintf(buffer,"%s /%s %s\r\nHost: %s\r\nConnection: close\r\n\r\n",method, temp, t3, t2);
 			else
@@ -279,20 +322,17 @@ int main(int argc,char* argv[])
 		}
 		else
 		{
-			//send(newsockfd,"400 : BAD REQUEST\nONLY HTTP REQUESTS ALLOWED",18,0);
 			char response[] = "501: NOT IMPLEMENTED\nONLY HTTP REQUEST: GET, HEAD, POST ALLOWED\n";
 			send(newsockfd,response,strlen(response),0);
-
+			wait(NULL);
 			//(*g_error)++;
 			//printf("Gia tri g_error hien tai: %d\n",*g_error);
-		}
-		
+		}	
 		close:
 		
 		close(sockfd1);
 		close(newsockfd);
 		close(sockfd);
-		//_exit(0);
 		free(htmlcontent);
 		if(filter_domain != NULL)
 			free(filter_domain);
@@ -311,6 +351,7 @@ int main(int argc,char* argv[])
 
 //Nhan SIGUSR 1
 //Report lai cac thong tin chuong trinh khi chay
+/*
 void printReport()
 {
 	printf("\nReceive SIGUSR1.....reporting status:");
@@ -322,16 +363,20 @@ void printReport()
 		printf("\n-- Filtering: (empty).");
 		
 	printf("\n-- Filtered %d request(s).",*g_filter);
-	//printf("\nTrack 1\n");
 	printf("\n-- Encountered %d request(s) in error.\n",*g_error);
 	
 }
+*/
 
 //Nhan SIGUSR 2
 //Shutdown chuong trinh
 void shutDown()
 {
 	printf("\nGet SIGUSR2, the program will shutdown\n");
+	if(filter_domain != NULL)
+		free(filter_domain);
+	if(htmlcontent != NULL)
+		free(htmlcontent);
 	exit(1);
 }
 
@@ -346,15 +391,6 @@ void error(char* msg)
 {
 	perror(msg);
 	exit(0);
-}
-
-void lockMutexCount(int *count)
-{
-	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-	pthread_mutex_lock(&mutex);
-	(*count)++;
-	printf("Count: %d\n",*count);
-	pthread_mutex_unlock(&mutex);
 }
 
 
