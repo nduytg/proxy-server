@@ -41,6 +41,7 @@ g_var g;
 //Report lai cac thong tin chuong trinh khi chay
 void printReport()
 {
+	printf("Not completed...\n");
 }
 
 //Nhan SIGUSR 2
@@ -65,10 +66,10 @@ void clean_zombie(int signal)
 int main(int argc,char* argv[])
 {
 	//Signal catcher!
-	//signal(SIGCHLD,clean_zombie);
-	signal(SIGINT,skip);
-	signal(SIGUSR2,shutDown);
-	signal(SIGUSR1,printReport);
+	signal(SIGCHLD,clean_zombie);			//clean zombie
+	signal(SIGINT,skip);					//Skip Ctrl-C
+	signal(SIGUSR2,shutDown);				//Shutdown when getting SIGUSR2
+	signal(SIGUSR1,printReport);			//Printreport whenrecv SIGUSR1
 	//---------------
 	
 	pid_t pid;
@@ -324,7 +325,7 @@ int main(int argc,char* argv[])
 		{
 			char response[] = "501: NOT IMPLEMENTED\nONLY HTTP REQUEST: GET, HEAD, POST ALLOWED\n";
 			send(newsockfd,response,strlen(response),0);
-			wait(NULL);
+			//wait(NULL);
 			//(*g_error)++;
 			//printf("Gia tri g_error hien tai: %d\n",*g_error);
 		}	
